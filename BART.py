@@ -9,12 +9,13 @@ from tkinter import ttk
 
 
 class BalloonAnalogueRiskTask:
-    def __init__(self, master):
+    def __init__(self, master, user):
         self.master = master
-        
+        self.user = user
         # setup game relevant data
         self.print_to_console = True
-        self.log_file = open("log.txt", "a+", buffering=1)
+        self.csv_file = open("log.csv", "a+", buffering=1)
+        self.csv_file.write(f"timestamp, user, event, nr_ballons, pumps, overall_money, pump_probability, burst_chance\n")
         self.score = 0
         self.pumps = 0
         self.nr_balloons = 30
@@ -144,12 +145,20 @@ class BalloonAnalogueRiskTask:
         self.moving_bar_text = self.bar.create_text(0.3*self.bar_frame_w, 0.9*self.bar_frame_h, text=f"{-self.punishment}", fill="black", font=('Helvetica 12 bold'))
         #self.bar_title = tk.Label(self.bar, text="Potential Losses for this Balloon", font=("Arial", 14))
         #self.bar_title.grid(row=0, column=0)
+        self.log_csv("game_start")
         
     def log(self, msg):
         if self.print_to_console:
             print(f"[*] {msg}")
         self.log_file.write(msg)
         self.log_file.flush()
+        
+    def log_csv(self, event, prob="", burst_chance=""):
+        # timestamp, event, nr_ballons, pumps, overall_money, pump_probability, burst_chance\n
+        if self.print_to_console:
+            print(f"[*] {time.time()},{self.user},{event},{self.nr_balloons},{self.pumps},{self.budget},{prob},{burst_chance}")
+        self.csv_file.write(f"{time.time()},{self.user},{event},{self.nr_balloons},{self.pumps},{self.budget},{prob},{burst_chance}\n") 
+        self.csv_file.flush()
     
     def burst_chance(self):
         return 1 / (self.max_pumps - self.pumps + 1)
@@ -189,11 +198,13 @@ class BalloonAnalogueRiskTask:
         self.bar.itemconfig(self.moving_bar_text, text=f"{-self.punishment+self.pumps}")
     
     def checkout(self):
+        self.log_csv(f"checkout")
         playsound('casino.wav', False)
         self.nr_balloons = self.nr_balloons - 1
         self.score_label.config(text="Score: {}".format(self.budget))
         self.tries_label.config(text="Balloons Left: {}".format(self.nr_balloons))
         if self.nr_balloons == 0:
+                self.log_csv(f"game over")
                 self.game_over = True
                 self.pump_button.config(text="Game Over", state="disabled")
                 self.checkout_button.config(text="Game Over", state="disabled")
@@ -219,8 +230,9 @@ class BalloonAnalogueRiskTask:
         prob = random.random()
         b_chance = self.burst_chance()
         burst = prob < b_chance
-        self.log(f"ballon pumped, nr pumps: {self.pumps}, probability: {prob}, burst chance: {b_chance}, new budget: {self.budget}")
+        self.log_csv(f"ballon pumped", prob=prob, burst_chance=b_chance)
         if burst:
+            self.log_csv(f"ballon burst", prob=prob, burst_chance=b_chance)
             self.reset_bar(max_punish=True)
             playsound('explosion.wav', False)
             popped_img = Image.open("poppedballoon.jpg")
@@ -235,6 +247,7 @@ class BalloonAnalogueRiskTask:
             self.tries_label.config(text="Balloons Left: {}".format(self.nr_balloons))
             if self.nr_balloons == 0:
                 self.game_over = True
+                self.log_csv(f"game over")
                 self.pump_button.config(text="Game Over", state="disabled")
                 self.checkout_button.config(text="Game Over", state="disabled")
                 self.score_label.config(text="Score: {}".format(self.budget))
@@ -249,6 +262,7 @@ class BalloonAnalogueRiskTask:
             self.pump_ballon()
             self.pump_bar()
             if self.pumps == self.max_pumps:
+                self.log_csv(f"max pumps reached")
                 self.checkout()
             else:
                 self.score_label.config(text="Score: {}".format(self.budget))
@@ -267,24 +281,16 @@ class BalloonAnalogueRiskTask:
         self.checkout_button.config(text="Collect CHF", state="active")
         self.reset_bar()
         self.reset_ballon()
+        self.log_csv(f"new balloon")
 
-# Scale the label when the window size changes
-def on_configure(event):
-    # Get the fullscreen width and height
-    width = root.winfo_width()
-    height = root.winfo_height()
-
-# Bind to the <Configure> event of the root window
     
 user = sys.argv[1]
-print(user)
 root = tk.Tk()
 #root.configure(bg='white')
-root.bind("<Configure>", on_configure) 
 root.title('Ballon Game')
 screenWidth = root.winfo_screenwidth()
 screenHeight = root.winfo_screenheight()      
 root.minsize(width=screenWidth, height=screenHeight)
 #root.attributes('-fullscreen', True)
-app = BalloonAnalogueRiskTask(root)
+app = BalloonAnalogueRiskTask(root, user)
 root.mainloop()
